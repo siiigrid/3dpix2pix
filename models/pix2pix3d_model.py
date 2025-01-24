@@ -61,8 +61,9 @@ class Pix2Pix3dModel(BaseModel):
         print("----Setting up metrics calculator----")
         AtoB_name = opt.name[8:15]
         metrics = ['ssim', 'psnr', "nmse"] # initially hardcoded
-        self.MetricsCalculator = Metrics("/mnt/work/datasets/FLUTE/PICAI/seq-256x256x32_train", metrics, AtoB_name) #careful, it is hardcoded
+        self.MetricsCalculator = Metrics(opt.dataroot, metrics, AtoB_name) #careful, it is hardcoded
         print("------Metrics calculator initialized------")
+
 
     def set_input(self, input):
         AtoB = self.opt.which_direction == 'AtoB'
