@@ -165,16 +165,22 @@ class UnetGenerator(nn.Module):
 # Rotary Positional Embedding Function
 def rotary_embedding(pos, dim):
     inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
+    inv_freq = inv_freq.to('cuda')
+    pos = pos.to('cuda')
     sinusoid_inp = torch.einsum("i,j->ij", pos, inv_freq)  # Outer product
     emb = torch.cat([sinusoid_inp.sin(), sinusoid_inp.cos()], dim=-1)
-    return emb
+    return emb.T # i transpose it odtherwise i have problems with the shape
 
-# RoPE Attention Block
+
+
+
+
 class RoPEAttention3D(nn.Module):
     def __init__(self, in_channels, num_heads=4):
         super(RoPEAttention3D, self).__init__()
         self.num_heads = num_heads
         self.head_dim = in_channels // num_heads
+        assert in_channels % num_heads == 0, "in_channels must be divisible by num_heads"
 
         self.query = nn.Conv3d(in_channels, in_channels, kernel_size=1)
         self.key = nn.Conv3d(in_channels, in_channels, kernel_size=1)
@@ -184,8 +190,8 @@ class RoPEAttention3D(nn.Module):
         self.out = nn.Conv3d(in_channels, in_channels, kernel_size=1)
 
     def forward(self, x):
-        print("checking input shape", x.size())
         B, C, D, H, W = x.size()
+        #print("x.size()", x.size())
         assert C % self.num_heads == 0, "Channels must be divisible by num_heads"
 
         # Generate query, key, value
@@ -195,7 +201,10 @@ class RoPEAttention3D(nn.Module):
 
         # Generate positional embeddings
         pos = torch.linspace(-1, 1, D * H * W, device=x.device)
+        #print("pos.size()", pos.size())
+        #print("q.size()", q.size())
         pos_emb = rotary_embedding(pos, self.head_dim)
+        #print("pos_emb.size()", pos_emb.size())
 
         # Apply RoPE
         q = q * pos_emb.unsqueeze(0).unsqueeze(0)  # Apply rotation to query
@@ -206,8 +215,10 @@ class RoPEAttention3D(nn.Module):
         attn = self.softmax(attn)
 
         out = torch.einsum("bhnm,bhcm->bhcn", attn, v)  # Weighted sum
-        out = out.view(B, C, D, H, W)  # Reshape back
+        #print("out.size()", out.size())
+        out = out.reshape(B, C, D, H, W)  # Reshape back
         return self.out(out + x)  # Residual connection
+
 
 # Defines the submodule with skip connection.
 # X -------------------identity---------------------- X
@@ -217,6 +228,7 @@ class UnetSkipConnectionBlock(nn.Module):
                  submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm3d, use_dropout=False, attention_G=False):
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
+        self.attention_G = attention_G
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm3d
         else:
@@ -253,7 +265,7 @@ class UnetSkipConnectionBlock(nn.Module):
             
             # Use attention_G in skip connections
             if attention_G:
-                up = [RoPEAttention3D(inner_nc)] + up
+                up = [RoPEAttention3D(inner_nc*2)] + up
 
             if use_dropout:
                 model = down + [submodule] + up + [nn.Dropout(0.5)]
