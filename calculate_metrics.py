@@ -20,7 +20,9 @@ class Metrics:
     def __init__(self, real_dir, metrics, AtoB_name):
         self.real_dir = real_dir
         self.psnr = self.fid = self.ssim = self.nmse = False
-        self.image_class = AtoB_name[12:15]
+        self.image_class = AtoB_name[-3:]
+        print(self.image_class)
+        print(AtoB_name)
         self.AtoB_name = AtoB_name
         self.transform = picai_transforms
         self.data_paths_real = self.get_data_paths()
@@ -176,7 +178,9 @@ class Metrics:
         #if self.fid: final_fid = self.calculate_fid(self.generated_dir) 
         #if self.pr: precision, recall = self.calculate_pr(self.generated_dir)
         for data_dict in self.data_paths_real:
+            #print(data_dict["subject_id"])
             generated_image_path = os.path.join(self.generated_dir, data_dict["subject_id"] + "_" + self.image_class + ".npy")
+            #print(generated_image_path)
             if os.path.exists(generated_image_path):
                 #print("Processing subject", data_dict["subject_id"])
                 ground_truth = nib.load(data_dict[self.image_class]).get_fdata()
@@ -192,10 +196,10 @@ class Metrics:
 
 # Example usage
 ground_truth_dir = '/mnt/work/datasets/FLUTE/PICAI/seq-128x128x32_test'
-generated_dir = './generated'
+generated_dir = './generated_att'
 metrics = ['ssim', 'psnr', "nmse"]
 #metrics = ['fid', 'pr']
-AtoB_name = 'adc2t2w'
+AtoB_name = 't2w2adc'
 m = Metrics(ground_truth_dir, metrics, AtoB_name)
 dims = [2]
 for dim in dims:

@@ -31,7 +31,7 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 
-def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, gpu_ids=[], attention_G=False):
+def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropout=False, gpu_ids=[], attention_G='normal'):
     netG = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
@@ -136,7 +136,7 @@ class GANLoss(nn.Module):
 # at the bottleneck
 class UnetGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, num_downs, ngf=64,
-                 norm_layer=nn.BatchNorm3d, use_dropout=False, gpu_ids=[], attention_G = False):
+                 norm_layer=nn.BatchNorm3d, use_dropout=False, gpu_ids=[], attention_G = 'normal'):
         super(UnetGenerator, self).__init__()
         self.gpu_ids = gpu_ids
 
@@ -155,10 +155,13 @@ class UnetGenerator(nn.Module):
         self.model = unet_block
 
     def forward(self, input):
+        #print(f"Input shape to UnetGenerator: {input.shape}")  # Log the initial input shape
         if self.gpu_ids and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            output = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
         else:
-            return self.model(input)
+            output = self.model(input)
+        #print(f"Output shape from UnetGenerator: {output.shape}")  # Log the final output shape
+        return output
 
 
 
@@ -220,12 +223,78 @@ class RoPEAttention3D(nn.Module):
         return self.out(out + x)  # Residual connection
 
 
+
+class RoPEMultiHeadCrossAttention3D(nn.Module):
+    def __init__(self, in_channels, num_heads=4):
+        super(RoPEMultiHeadCrossAttention3D, self).__init__()
+        self.num_heads = num_heads
+        self.head_dim = in_channels // num_heads
+        assert in_channels % num_heads == 0, "in_channels must be divisible by num_heads"
+
+        # Linear projections for query, key, value
+        self.query = nn.Conv3d(in_channels, in_channels, kernel_size=1)
+        self.key = nn.Conv3d(in_channels, in_channels, kernel_size=1)
+        self.value = nn.Conv3d(in_channels, in_channels, kernel_size=1)
+
+        # Output projection
+        self.out = nn.Conv3d(in_channels, in_channels*2, kernel_size=1)
+
+        # Softmax for attention weights
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        # Deconcatenate input tensor into query and key-value features
+        query_features, key_value_features = torch.chunk(x, 2, dim=1)
+        # print("query_features.size()", query_features.size())
+        # print("key_value_features.size()", key_value_features.size())	
+
+
+        B, C, D, H, W = query_features.size()
+        assert C % self.num_heads == 0, "Channels must be divisible by num_heads"
+
+        # Generate query, key, value
+        ("query_features.size()", query_features.size())
+        # print(self.query)
+        q = self.query(query_features).view(B, self.num_heads, self.head_dim, -1)
+        k = self.key(key_value_features).view(B, self.num_heads, self.head_dim, -1)
+        v = self.value(key_value_features).view(B, self.num_heads, self.head_dim, -1)
+        # print("i arrived after computing q, k, v")
+
+        # Generate positional embeddings
+        pos = torch.linspace(-1, 1, D * H * W, device=x.device)
+        pos_emb = rotary_embedding(pos, self.head_dim)
+
+        # print("positional embedings computed")
+
+        # Apply RoPE
+        q = q * pos_emb.unsqueeze(0).unsqueeze(0)
+        k = k * pos_emb.unsqueeze(0).unsqueeze(0)
+
+        # print("rope applied")
+
+        # Attention computation
+        attn = torch.einsum("bhcn,bhcm->bhnm", q, k)
+        attn = self.softmax(attn)
+
+        # print("attention computed")
+
+        out = torch.einsum("bhnm,bhcm->bhcn", attn, v)
+        out = out.reshape(B, C, D, H, W)
+        # print("out.size()", out.size())
+        # print("query_features.size()", query_features.size())
+        print((out + query_features).size())
+
+        output = self.out(out + query_features)
+
+        return output # Residual connection
+
+
 # Defines the submodule with skip connection.
 # X -------------------identity---------------------- X
 #   |-- downsampling -- |submodule| -- upsampling --|
 class UnetSkipConnectionBlock(nn.Module):
     def __init__(self, outer_nc, inner_nc,
-                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm3d, use_dropout=False, attention_G=False):
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm3d, use_dropout=False, attention_G='normal'):
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
         self.attention_G = attention_G
@@ -264,8 +333,10 @@ class UnetSkipConnectionBlock(nn.Module):
 
             
             # Use attention_G in skip connections
-            if attention_G:
+            if attention_G == "self":
                 up = [RoPEAttention3D(inner_nc*2)] + up
+            elif attention_G == "cross":
+                up = [RoPEMultiHeadCrossAttention3D(inner_nc)] + up # here not *2 because we are not concatenating the features with the skip connection
 
             if use_dropout:
                 model = down + [submodule] + up + [nn.Dropout(0.5)]
@@ -275,10 +346,17 @@ class UnetSkipConnectionBlock(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
+        #print(f"Input shape at this block: {x.shape}")  # Log the input shape
         if self.outermost:
-            return self.model(x)
+            output = self.model(x)
+            #print(f"Output shape at outermost block: {output.shape}")  # Log the output shape
+            return output
         else:
-            return torch.cat([self.model(x), x], 1)
+            output = self.model(x)
+            #print(f"Output shape before concatenation: {output.shape}")  # Log the intermediate output shape
+            concatenated = torch.cat([output, x], 1)
+            #print(f"Output shape after concatenation: {concatenated.shape}")  # Log the concatenated shape
+            return concatenated
 
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):

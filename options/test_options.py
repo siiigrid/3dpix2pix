@@ -11,4 +11,5 @@ class TestOptions(BaseOptions):
         self.parser.add_argument('--which_epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         self.parser.add_argument('--how_many', type=int, default=50, help='how many test images to run')
         self.parser.add_argument('--save_gif', type=bool, default=False, help='save volume as gif')
+        self.parser.add_argument('--attention_G', type=str, default='normal', help='use attention in the generator')
         self.isTrain = False

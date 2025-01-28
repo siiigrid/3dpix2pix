@@ -77,7 +77,7 @@ def plot_3d_tensor(tensor):
 
 
 
-directory = "generated"
+directory = "generated_att"
 
 # Check if the directory exists, if not, create it
 if not os.path.exists(directory):
@@ -87,7 +87,7 @@ else:
     print(f"Directory '{directory}' already exists.")
 
 
-base_directory = "generated"
+base_directory = "generated_att"
 subdirectory = opt.name[8:15]
 subdirectory_path = os.path.join(base_directory, subdirectory)
 

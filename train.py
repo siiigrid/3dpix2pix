@@ -21,6 +21,7 @@ config = {
     "name": opt.name[8:15],
     "datast": opt.dataroot,  
     "attention_G": opt.attention_G,
+    "network": opt.which_model_netG,
 }
 
 run = wandb.init(project = "3dpix2pix", config = config)
