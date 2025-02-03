@@ -107,8 +107,7 @@ class Metrics:
             s_img1 = s_img1.squeeze().cpu().numpy().astype(np.float32)
             s_img2 = s_img2.squeeze().cpu().numpy().astype(np.float32)
             s_img2 = (s_img2 + 1) / 2 # normalize img2 to [0, 1]
-            print("ssim", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
-            #print(s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
+            # print("ssim", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
             ssim_value, _ = ssim(s_img1, s_img2, full=True, data_range = 1)
             vals.append(ssim_value)
         return np.mean(vals)
@@ -164,7 +163,7 @@ class Metrics:
                 s_img1 = img1[0, i, :, :]
                 s_img2 = img2[0 ,i, :, :]
                 s_img2 = (s_img2 + 1) / 2 # normalize img2 to [0, 1]
-                print("psnr", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
+                # print("psnr", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
                 vals.append(self.calculate_psnr_def(s_img1, s_img2, dim))
             return np.mean(vals)
         return self.calculate_psnr_def(img1, img2, dim)

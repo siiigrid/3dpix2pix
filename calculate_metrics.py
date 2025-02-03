@@ -107,7 +107,7 @@ class Metrics:
             s_img2 = img2[0 ,i, :, :]
             s_img1 = s_img1.squeeze().cpu().numpy().astype(np.float32)
             s_img2 = s_img2.squeeze().cpu().numpy().astype(np.float32)
-            print("ssim", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
+            s_img2 = (s_img2 + 1) / 2 # normalize img2 to [0, 1]
             #print(s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
             ssim_value, _ = ssim(s_img1, s_img2, full=True, data_range = 2)
             vals.append(ssim_value)
@@ -136,6 +136,7 @@ class Metrics:
                 s_img2 = img2[0 ,i, :, :]
                 s_img1 = s_img1.squeeze().cpu().numpy().astype(np.float32)
                 s_img2 = s_img2.squeeze().cpu().numpy().astype(np.float32)
+                s_img2 = (s_img2 + 1) / 2 # normalize img2 to [0, 1]
                 vals.append(self.calculate_nmse_def(s_img1, s_img2, dim))
             return np.mean(vals)
         return self.calculate_nmse_def(img1, img2, dim)
@@ -163,6 +164,7 @@ class Metrics:
             for i in zip(range(img1.shape[1])):
                 s_img1 = img1[0, i, :, :]
                 s_img2 = img2[0 ,i, :, :]
+                s_img2 = (s_img2 + 1) / 2 # normalize img2 to [0, 1]
                 vals.append(self.calculate_psnr_def(s_img1, s_img2, dim))
             return np.mean(vals)
         return self.calculate_psnr_def(img1, img2, dim)
