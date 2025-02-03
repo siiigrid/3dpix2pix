@@ -77,7 +77,7 @@ def plot_3d_tensor(tensor):
 
 
 
-directory = "generated_att"
+directory = "generated" + opt.name[15:]
 
 # Check if the directory exists, if not, create it
 if not os.path.exists(directory):
@@ -87,7 +87,7 @@ else:
     print(f"Directory '{directory}' already exists.")
 
 
-base_directory = "generated_att"
+base_directory = directory
 subdirectory = opt.name[8:15]
 subdirectory_path = os.path.join(base_directory, subdirectory)
 
@@ -96,6 +96,7 @@ if not os.path.exists(subdirectory_path):
     print(f"Subdirectory '{subdirectory}' created inside '{base_directory}'.")
 else:
     print(f"Subdirectory '{subdirectory}' already exists inside '{base_directory}'.")
+
     
 
 for i, data in enumerate(dataset):
@@ -125,7 +126,7 @@ for i, data in enumerate(dataset):
 
 
     # save image as gif
-    if opt.save_gif:
+    if opt.save_gif == True:
         if opt.which_direction == 'AtoB':
             gif_path = data['B_paths'][0].split('/')[7].split('.')[0] + ".gif"
         else:

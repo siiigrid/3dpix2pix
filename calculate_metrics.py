@@ -9,12 +9,19 @@ import torch
 from FID_implementation.fid_score import calculate_fid_given_paths
 #from FID_implementation.precision_recall import compute_pr
 
-picai_transforms = transforms.Compose(
-    [
-        transforms.ToTensor(),
-        #transforms.ScaleIntensityRangePercentilesd(lower=0, upper=99.75, b_min=0, b_max=1)
-    ]
-)
+def scale_and_normalize(img, lower=0, upper=99.75, b_min=0, b_max=1):
+    # Scale intensity range
+    low_val = torch.quantile(img, lower / 100)
+    high_val = torch.quantile(img, upper / 100)
+    img = torch.clamp((img - low_val) / (high_val - low_val), 0, 1)  # Normalize to [0,1]
+    img = img * (b_max - b_min) + b_min
+
+    return img
+
+picai_transforms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Lambda(lambda img: scale_and_normalize(img, 0, 99.75, 0, 1))
+])
 
 class Metrics:
     def __init__(self, real_dir, metrics, AtoB_name):
@@ -100,6 +107,7 @@ class Metrics:
             s_img2 = img2[0 ,i, :, :]
             s_img1 = s_img1.squeeze().cpu().numpy().astype(np.float32)
             s_img2 = s_img2.squeeze().cpu().numpy().astype(np.float32)
+            print("ssim", s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
             #print(s_img1.max(), s_img2.max(), s_img1.min(), s_img2.min())
             ssim_value, _ = ssim(s_img1, s_img2, full=True, data_range = 2)
             vals.append(ssim_value)
@@ -140,6 +148,7 @@ class Metrics:
         if dim == 2: max_pixel = 255.0
         else: max_pixel = torch.max(img1)
         psnr = 20 * np.log10(max_pixel / np.sqrt(mse))
+        print("psnr", max(img1), max(img2), min(img1), min(img2))
         return psnr
 
     def calculate_psnr(self, img1, img2, dim = 3):
@@ -199,7 +208,7 @@ ground_truth_dir = '/mnt/work/datasets/FLUTE/PICAI/seq-128x128x32_test'
 generated_dir = './generated_att'
 metrics = ['ssim', 'psnr', "nmse"]
 #metrics = ['fid', 'pr']
-AtoB_name = 't2w2adc'
+AtoB_name = 'adc2t2w'
 m = Metrics(ground_truth_dir, metrics, AtoB_name)
 dims = [2]
 for dim in dims:

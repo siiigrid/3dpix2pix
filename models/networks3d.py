@@ -282,7 +282,7 @@ class RoPEMultiHeadCrossAttention3D(nn.Module):
         out = out.reshape(B, C, D, H, W)
         # print("out.size()", out.size())
         # print("query_features.size()", query_features.size())
-        print((out + query_features).size())
+        # print((out + query_features).size())
 
         output = self.out(out + query_features)
 
@@ -330,6 +330,9 @@ class UnetSkipConnectionBlock(nn.Module):
                                         padding=1, bias=use_bias)
             down = [downrelu, downconv, downnorm]
             up = [uprelu, upconv, upnorm]
+
+            if attention_G == "self_begining":
+                down = [RoPEAttention3D(outer_nc, num_heads=1)] + down
 
             
             # Use attention_G in skip connections

@@ -4,6 +4,7 @@ import torch.utils.data as data
 import numpy as np
 from glob import glob
 import nibabel as nib
+import torch
 
 class BaseDataset(data.Dataset):
     def __init__(self):
@@ -15,12 +16,20 @@ class BaseDataset(data.Dataset):
     def initialize(self, opt):
         pass
 
-picai_transforms = transforms.Compose(
-    [
-        transforms.ToTensor(),
-        #transforms.ScaleIntensityRangePercentilesd(lower=0, upper=99.75, b_min=0, b_max=1)
-    ]
-)
+
+def scale_and_normalize(img, lower=0, upper=99.75, b_min=0, b_max=1):
+    # Scale intensity range
+    low_val = torch.quantile(img, lower / 100)
+    high_val = torch.quantile(img, upper / 100)
+    img = torch.clamp((img - low_val) / (high_val - low_val), 0, 1)  # Normalize to [0,1]
+    img = img * (b_max - b_min) + b_min
+
+    return img
+
+picai_transforms = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Lambda(lambda img: scale_and_normalize(img, 0, 99.75, 0, 1))
+])
 
 
 class ProstateDataset(BaseDataset):

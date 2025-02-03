@@ -15,7 +15,7 @@ def create_model(opt):
         from .test_model import TestModel
         model = TestModel()
     elif opt.model == 'pix2pix3d':
-        assert(opt.dataset_mode == 'prostate')
+        assert(opt.dataset_mode == 'prostate' or opt.dataset_mode == "prostate2")
         from .pix2pix3d_model import Pix2Pix3dModel
         model = Pix2Pix3dModel()
     else:

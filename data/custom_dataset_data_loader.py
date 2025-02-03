@@ -19,6 +19,9 @@ def CreateDataset(opt):
     elif opt.dataset_mode == 'prostate':
         from data.prostate_dataset import ProstateDataset
         dataset = ProstateDataset()
+    elif opt.dataset_mode == 'prostate2':
+        from data.prostate2_dataset import ProstateDataset2
+        dataset = ProstateDataset2()
     else:
         raise ValueError("Dataset [%s] not recognized." % opt.dataset_mode)
 
