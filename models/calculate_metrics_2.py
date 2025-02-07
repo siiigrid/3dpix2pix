@@ -24,11 +24,20 @@ picai_transforms = transforms.Compose([
 ])
 
 
+def extract_patient_id(filepath):
+    """Extracts the patient ID from the filename (assumes format: 'ProstateX-0062_*')"""
+    return os.path.basename(filepath).split('_')[0]
+
 class Metrics:
-    def __init__(self, real_dir, metrics, AtoB_name):
+    def __init__(self, real_dir, metrics, AtoB_name, dataset_name):
+        self.dataset_name = dataset_name
         self.real_dir = real_dir
         self.psnr = self.fid = self.ssim = self.nmse = False
         self.image_class = AtoB_name[-3:] # cuidado que depen del opt.name!!
+        if self.dataset_name == "prostatex":
+            if self.image_class == "h50": self.image_class = "b-value-50"
+            if self.image_class == "400": self.image_class = "b-value-400"
+            if self.image_class == "800": self.image_class = "b-value-800"
         self.AtoB_name = AtoB_name
         self.transform = picai_transforms
         self.data_paths_real = self.get_data_paths()
@@ -53,23 +62,61 @@ class Metrics:
 
 
     def get_data_paths(self):
-        self.t2w_paths = sorted(glob(os.path.join(self.real_dir, '*t2w.nii.gz')))
-        self.adc_paths = sorted(glob(os.path.join(self.real_dir, '*adc.nii.gz')))
-        self.hbv_paths = sorted(glob(os.path.join(self.real_dir, '*hbv.nii.gz')))
-
         self.data = []
+        self.transform = picai_transforms
+        if self.dataset_name == "picai":
+            print("Using PICAI dataset")
+            self.t2w_paths = sorted(glob(os.path.join(self.real_dir, '*t2w.nii.gz')))
+            self.adc_paths = sorted(glob(os.path.join(self.real_dir, '*adc.nii.gz')))
+            self.hbv_paths = sorted(glob(os.path.join(self.real_dir, '*hbv.nii.gz')))
+            print(len(self.t2w_paths),len(self.adc_paths),len(self.hbv_paths), self.real_dir)
+            
+            
+            # if len(self.t2w_paths) == 1400: self.seg_paths = sorted(glob(os.path.join('/mnt/gpid08/datasets/FLUTE/PICAI/mask_combined/binary_masks/training_set', '*.nii.gz')))
+            # else:  self.seg_paths = sorted(glob(os.path.join('/mnt/gpid08/datasets/FLUTE/PICAI/mask_combined/binary_masks/test_set', '*.nii.gz')))
 
-        if len(self.t2w_paths) == 1400: self.seg_paths = sorted(glob(os.path.join('/mnt/gpid08/datasets/FLUTE/PICAI/mask_combined/binary_masks/training_set', '*.nii.gz')))
-        else:  self.seg_paths = sorted(glob(os.path.join('/mnt/gpid08/datasets/FLUTE/PICAI/mask_combined/binary_masks/test_set', '*.nii.gz')))
+            for t2w, adc, hbv in zip(self.t2w_paths, self.adc_paths, self.hbv_paths):
+                subject = os.path.basename(t2w)[:-11]
+                assert subject == os.path.basename(adc)[:-11]
+                assert subject == os.path.basename(hbv)[:-11]
+                # assert subject == os.path.basename(seg)[:-7]
+                self.data.append({"adc":adc, "t2w":t2w, "hbv": hbv,"subject_id": subject})
 
-        
 
-        for t2w, adc, hbv, seg in zip(self.t2w_paths, self.adc_paths, self.hbv_paths, self.seg_paths):
-            subject = os.path.basename(t2w)[:-11]
-            assert subject == os.path.basename(adc)[:-11]
-            assert subject == os.path.basename(hbv)[:-11]
-            assert subject == os.path.basename(seg)[:-7]
-            self.data.append({"t2w":t2w, "hbv":hbv, "adc": adc, "seg":seg, "subject_id": subject})
+        elif self.dataset_name == "prostatex":
+            print("Using ProstateX dataset")
+            self.t2w_paths = sorted(glob(os.path.join(self.real_dir, '*t2_smoothed.nii.gz')))
+            # self.adc_paths = sorted(glob(os.path.join(self.real_dir, '*adc_map_registered.nii.gz')))
+            self.hbv_50_paths = sorted(glob(os.path.join(self.real_dir, '*-50.nii.gz')))
+            self.hbv_400_paths = sorted(glob(os.path.join(self.real_dir, '*-400.nii.gz')))
+            self.hbv_800_paths = sorted(glob(os.path.join(self.real_dir, '*-800.nii.gz')))
+            self.all = sorted(glob(os.path.join(self.real_dir, '*')))
+            print(len(self.t2w_paths),len(self.hbv_50_paths), len(self.hbv_400_paths), len(self.hbv_800_paths), self.real_dir)
+            
+            # Create sets of patient IDs for each modality
+            t2w_ids = {extract_patient_id(p) for p in self.t2w_paths}
+            # adc_ids = {extract_patient_id(p) for p in self.adc_paths}
+            hbv_50_ids = {extract_patient_id(p) for p in self.hbv_50_paths}
+            hbv_400_ids = {extract_patient_id(p) for p in self.hbv_400_paths}
+            hbv_800_ids = {extract_patient_id(p) for p in self.hbv_800_paths}
+
+            valid_patient_ids = t2w_ids & hbv_50_ids & hbv_400_ids & hbv_800_ids
+
+            # Filter file lists to keep only valid patients
+            self.t2w_paths = [p for p in self.t2w_paths if extract_patient_id(p) in valid_patient_ids]
+            # self.adc_paths = [p for p in self.adc_paths if extract_patient_id(p) in valid_patient_ids]
+            self.hbv_50_paths = [p for p in self.hbv_50_paths if extract_patient_id(p) in valid_patient_ids]
+            self.hbv_400_paths = [p for p in self.hbv_400_paths if extract_patient_id(p) in valid_patient_ids]
+            self.hbv_800_paths = [p for p in self.hbv_800_paths if extract_patient_id(p) in valid_patient_ids]
+
+            for t2w, hbv50, hbv400, hbv800 in zip(self.t2w_paths, self.hbv_50_paths, self.hbv_400_paths, self.hbv_800_paths):
+                subject = os.path.basename(t2w)[:-19]
+                # print(subject, os.path.basename(adc)[:-26], os.path.basename(hbv50)[:-18], os.path.basename(hbv400)[:-19], os.path.basename(hbv800)[:-19])
+                # assert subject == os.path.basename(adc)[:-26]
+                assert subject == os.path.basename(hbv50)[:-18]
+                assert subject == os.path.basename(hbv400)[:-19]
+                assert subject == os.path.basename(hbv800)[:-19]
+                self.data.append({"t2w":t2w, "b-value-50": hbv50, "b-value-400": hbv400, "b-value-800": hbv800,"subject_id": subject})
 
         return self.data
         
@@ -196,6 +243,7 @@ class Metrics:
                 ground_truth = self.transform(ground_truth).unsqueeze(0)
                 generated_image = np.load(generated_image_path)
                 generated_image = torch.from_numpy(generated_image)
+                #print("ground truth", ground_truth.shape, "generated image", generated_image.shape)
                 if self.psnr: psnr_values.append(self.calculate_psnr(ground_truth, generated_image, dim = 2))
                 if self.ssim: ssim_values.append(self.calculate_ssim(ground_truth, generated_image, dim = 2))
                 if self.nmse: nmse_values.append(self.calculate_nmse(ground_truth, generated_image, dim = 2)) 

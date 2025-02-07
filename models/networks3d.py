@@ -102,6 +102,7 @@ class GANLoss(nn.Module):
         self.real_label_var = None
         self.fake_label_var = None
         self.Tensor = tensor
+        self.device = torch.device('cuda:0')
         if use_lsgan:
             self.loss = nn.MSELoss()
         else:
@@ -127,7 +128,7 @@ class GANLoss(nn.Module):
 
     def __call__(self, input, target_is_real):
         target_tensor = self.get_target_tensor(input, target_is_real)
-        return self.loss(input, target_tensor)
+        return self.loss(input.to(self.device), target_tensor.to(self.device))
 
     
 # Defines the Unet generator.
@@ -157,7 +158,8 @@ class UnetGenerator(nn.Module):
     def forward(self, input):
         #print(f"Input shape to UnetGenerator: {input.shape}")  # Log the initial input shape
         if self.gpu_ids and isinstance(input.data, torch.cuda.FloatTensor):
-            output = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            #output = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            output = self.model(input)
         else:
             output = self.model(input)
         #print(f"Output shape from UnetGenerator: {output.shape}")  # Log the final output shape
@@ -210,17 +212,17 @@ class RoPEAttention3D(nn.Module):
         #print("pos_emb.size()", pos_emb.size())
 
         # Apply RoPE
-        q = q * pos_emb.unsqueeze(0).unsqueeze(0)  # Apply rotation to query
-        k = k * pos_emb.unsqueeze(0).unsqueeze(0)  # Apply rotation to key
+        q = q * pos_emb.unsqueeze(0).unsqueeze(0).to(q.device)  # Apply rotation to query
+        k = k.to(q.device) * pos_emb.unsqueeze(0).unsqueeze(0).to(q.device)  # Apply rotation to key
 
         # Attention computation
         attn = torch.einsum("bhcn,bhcm->bhnm", q, k)  # Dot product
         attn = self.softmax(attn)
 
-        out = torch.einsum("bhnm,bhcm->bhcn", attn, v)  # Weighted sum
+        out = torch.einsum("bhnm,bhcm->bhcn", attn, v.to(q.device))  # Weighted sum
         #print("out.size()", out.size())
         out = out.reshape(B, C, D, H, W)  # Reshape back
-        return self.out(out + x)  # Residual connection
+        return self.out(out+ x)  # Residual connection
 
 
 
@@ -408,6 +410,7 @@ class NLayerDiscriminator(nn.Module):
 
     def forward(self, input):
         if len(self.gpu_ids) and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            #return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            return self.model(input)
         else:
             return self.model(input)

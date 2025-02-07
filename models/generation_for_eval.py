@@ -68,11 +68,17 @@ def generate(opt, epoch, how_many):
 
         # save image as npy
         if opt.which_direction == 'AtoB':
-            npy_path =  data['B_paths'][0].split('/')[7].split('.')[0] + ".npy"
+            if opt.dataset_name == "picai":
+                npy_path =  data['B_paths'][0].split('/')[7].split('.')[0] + ".npy"
+            elif opt.dataset_name == "prostatex":
+                npy_path =  data['B_paths'][0].split('/')[6].split('.')[0] + ".npy"
         else:
-            npy_path =  data['A_paths'][0].split('/')[7].split('.')[0] + ".npy"
+            if opt.dataset_name == "picai":
+                npy_path =  data['A_paths'][0].split('/')[7].split('.')[0] + ".npy"
+            elif opt.dataset_name == "prostatex":
+                npy_path =  data['A_paths'][0].split('/')[6].split('.')[0] + ".npy"
         final_npy_path = os.path.join(subdirectory_path, npy_path)
-        print(final_npy_path)
+        print("image shape: ", gen_image.shape)
         np.save(final_npy_path, gen_image)
 
         

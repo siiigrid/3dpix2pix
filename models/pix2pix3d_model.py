@@ -18,6 +18,7 @@ class Pix2Pix3dModel(BaseModel):
 
     def initialize(self, opt):
         BaseModel.initialize(self, opt)
+        self.device = torch.device('cuda:0')
         self.isTrain = opt.isTrain
         # define tensors
         self.input_A = self.Tensor(opt.batchSize, opt.input_nc,
@@ -61,7 +62,7 @@ class Pix2Pix3dModel(BaseModel):
         print("----Setting up metrics calculator----")
         AtoB_name = opt.name[8:15]
         metrics = ['ssim', 'psnr', "nmse"] # initially hardcoded
-        self.MetricsCalculator = Metrics(opt.dataroot, metrics, AtoB_name) #careful, it is hardcoded
+        self.MetricsCalculator = Metrics(opt.dataroot, metrics, AtoB_name, opt.dataset_name) #careful, it is hardcoded
         print("------Metrics calculator initialized------")
 
 
@@ -69,8 +70,8 @@ class Pix2Pix3dModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         input_A = input['A' if AtoB else 'B']
         input_B = input['B' if AtoB else 'A']
-        self.input_A.resize_(input_A.size()).copy_(input_A)
-        self.input_B.resize_(input_B.size()).copy_(input_B)
+        self.input_A.resize_(input_A.size()).copy_(input_A.to(self.device))  # Move input_A to the correct device
+        self.input_B.resize_(input_B.size()).copy_(input_B.to(self.device))  # Move input_B to the correct device
         #print("inputs", self.input_A.size(), self.input_B.size())
 
         #self.image_paths = input['A_paths' if AtoB else 'B_paths']
@@ -95,7 +96,7 @@ class Pix2Pix3dModel(BaseModel):
     def backward_D(self):
         # Fake
         # stop backprop to the generator by detaching fake_B
-        fake_AB = self.fake_AB_pool.query(torch.cat((self.real_A, self.fake_B), 1))
+        fake_AB = self.fake_AB_pool.query(torch.cat((self.real_A.to(self.device), self.fake_B.to(self.device)), 1))
         self.pred_fake = self.netD.forward(fake_AB.detach())
         self.loss_D_fake = self.criterionGAN(self.pred_fake, False)
 
@@ -111,13 +112,13 @@ class Pix2Pix3dModel(BaseModel):
 
     def backward_G(self):
         # First, G(A) should fake the discriminator
-        fake_AB = torch.cat((self.real_A, self.fake_B), 1)
+        fake_AB = torch.cat((self.real_A.to(self.device), self.fake_B.to(self.device)), 1)
         pred_fake = self.netD.forward(fake_AB)
 
         self.loss_G_GAN = self.criterionGAN(pred_fake, True)
 
         # Second, G(A) = B
-        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_A
+        self.loss_G_L1 = self.criterionL1(self.fake_B.to(self.device), self.real_B.to(self.device)) * self.opt.lambda_A
 
         self.loss_G = self.loss_G_GAN + self.loss_G_L1
 

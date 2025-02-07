@@ -116,21 +116,32 @@ for i, data in enumerate(dataset):
 
     # save image as npy
     if opt.which_direction == 'AtoB':
-        npy_path =  data['B_paths'][0].split('/')[7].split('.')[0] + ".npy"
+        if opt.dataset_name == "picai":
+            npy_path =  data['B_paths'][0].split('/')[7].split('.')[0] + ".npy"
+        elif opt.dataset_name == "prostatex":
+            npy_path =  data['B_paths'][0].split('/')[6].split('.')[0] + ".npy"
     else:
-        npy_path =  data['A_paths'][0].split('/')[7].split('.')[0] + ".npy"
+        if opt.dataset_name == "picai":
+            npy_path =  data['A_paths'][0].split('/')[7].split('.')[0] + ".npy"
+        elif opt.dataset_name == "prostatex":
+            npy_path =  data['A_paths'][0].split('/')[6].split('.')[0] + ".npy"
     final_npy_path = os.path.join(subdirectory_path, npy_path)
     np.save(final_npy_path, gen_image)
 
     
 
-
     # save image as gif
     if opt.save_gif == True:
         if opt.which_direction == 'AtoB':
-            gif_path = data['B_paths'][0].split('/')[7].split('.')[0] + ".gif"
+            if opt.dataset_name == "picai":
+                gif_path = data['B_paths'][0].split('/')[7].split('.')[0] + ".gif"
+            elif opt.dataset_name == "prostatex":
+                gif_path = data['B_paths'][0].split('/')[6].split('.')[0] + ".gif"
         else:
-            gif_path = data['A_paths'][0].split('/')[7].split('.')[0] + ".gif"
+            if opt.dataset_name == "picai":
+                gif_path = data['A_paths'][0].split('/')[7].split('.')[0] + ".gif"
+            elif opt.dataset_name == "prostatex":
+                gif_path = data['A_paths'][0].split('/')[6].split('.')[0] + ".gif"
 
         gen_image = np.squeeze(gen_image, axis=0)
         final_gif_path = os.path.join(subdirectory_path, gif_path)
